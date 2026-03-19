@@ -191,7 +191,30 @@ function createBot() {
 
     const client = bot._client;
 
-    // Log ALL packets so we can see what happens before the kick
+    // ── FORGE FML2 CHANNEL REGISTRATION ──────────────────────
+    // Forge 1.20.1 kicks clients during LOGIN if they haven't
+    // registered the FML2 channels during the SET_PROTOCOL handshake.
+    // We need to intercept the set_protocol packet and add FML2 channels.
+    // These channels tell the server "I am a Forge client".
+
+    // Patch the write method to intercept set_protocol
+    const _write = client.write.bind(client);
+    let patchedHandshake = false;
+    client.write = function(name, params) {
+      if (name === 'set_protocol' && !patchedHandshake) {
+        patchedHandshake = true;
+        log('Forge', `Patching set_protocol to add FML2 channels`);
+        // The server address field in handshake can carry FML2 marker
+        // Real Forge clients append \0FML2\0 to the server address
+        if (params && params.serverHost && !params.serverHost.includes('\0FML2\0')) {
+          params = { ...params, serverHost: params.serverHost + '\0FML2\0' };
+          log('Forge', `Server host patched: ${params.serverHost}`);
+        }
+      }
+      return _write(name, params);
+    };
+
+    // Log ALL packets so we can see what happens
     client.on('packet', (data, meta) => {
       if (['handshaking', 'login'].includes(meta.state)) {
         log('Packet', `[${meta.state}] ${meta.name}`);
