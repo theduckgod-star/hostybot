@@ -106,10 +106,59 @@ function createBot() {
       auth: config['bot-account'].type || 'offline',
       host: config.server.ip,
       port: config.server.port,
-      version: '1.20.1',          // pinned for Forge
-      forge: true,                 // enables FML/Forge handshake
+      version: '1.20.1',
       hideErrors: false,
       checkTimeoutInterval: 60000,
+      // FML2 handshake — intercept login packets to fake Forge client
+      // This tricks the server into thinking we have all required mods
+      plugins: {},
+    });
+
+    // ── FML2 FORGE HANDSHAKE BYPASS ──────────────────────────
+    // When the server sends the mod list during login, we echo it back
+    // so the server thinks we have all required mods installed.
+    // This is the only reliable way to join a Forge server without mods.
+    bot._client.on('custom_payload', (packet) => {
+      try {
+        const channel = packet.channel;
+        if (!channel) return;
+
+        // FML2 handshake channel
+        if (channel === 'fml:handshake' || channel === 'fml2:handshake') {
+          log('Forge', `FML handshake on channel: ${channel}`);
+          // Send acknowledgement back
+          bot._client.write('custom_payload', {
+            channel: channel,
+            data: packet.data
+          });
+        }
+
+        // ModList channel — server sends its mod list, we echo it back
+        if (channel === 'forge:tier') {
+          bot._client.write('custom_payload', {
+            channel: 'forge:tier',
+            data: packet.data
+          });
+        }
+      } catch (e) {
+        log('Forge', `Handshake error: ${e.message}`);
+      }
+    });
+
+    // Alternative: intercept login_plugin_request (1.20.1 uses this for FML)
+    bot._client.on('login_plugin_request', (packet) => {
+      try {
+        log('Forge', `Login plugin request: ${packet.channel || 'unknown'}`);
+        // Respond to ALL plugin requests with empty success response
+        // This makes the server think we accepted all mod negotiation
+        bot._client.write('login_plugin_response', {
+          messageId: packet.messageId,
+          successful: true,
+          data: packet.data || Buffer.alloc(0)
+        });
+      } catch (e) {
+        log('Forge', `Plugin request error: ${e.message}`);
+      }
     });
 
     bot.loadPlugin(pathfinder);
