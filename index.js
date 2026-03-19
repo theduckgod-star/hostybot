@@ -206,8 +206,8 @@ function createBot() {
         log('Forge', `Patching set_protocol to add FML2 channels`);
         // The server address field in handshake can carry FML2 marker
         // Real Forge clients append \0FML2\0 to the server address
-        if (params && params.serverHost && !params.serverHost.includes('\0FML2\0')) {
-          params = { ...params, serverHost: params.serverHost + '\0FML2\0' };
+        if (params && params.serverHost && !params.serverHost.includes('\0FML3\0')) {
+          params = { ...params, serverHost: params.serverHost + '\0FML3\0' };
           log('Forge', `Server host patched: ${params.serverHost}`);
         }
       }
