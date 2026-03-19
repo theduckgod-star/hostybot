@@ -246,23 +246,38 @@ function createBot() {
             }
             const innerChannel = data.slice(offset, offset + strLen).toString('utf8');
             log('FML', `Inner channel: ${innerChannel}`);
+            log('FML', `Raw data hex: ${data.toString('hex').slice(0, 80)}`);
+            log('FML', `Inner data hex: ${data.slice(offset + strLen).toString('hex').slice(0, 40)}`);
 
             if (innerChannel === 'fml:handshake') {
               const innerData = data.slice(offset + strLen);
               const disc = innerData.length > 0 ? innerData[0] : -1;
-              log('FML', `Handshake discriminator: ${disc}`);
+              log('FML', `Handshake discriminator: ${disc} (0x${disc.toString(16)})`);
 
               if (disc === 1) {
-                // S2CModList — wrap our mod list response in loginwrapper format
+                // S2CModList
                 const modListBuf = buildModListResponse();
                 const channelBuf = writeString('fml:handshake');
                 responseData = Buffer.concat([channelBuf, modListBuf]);
                 log('FML', `Sending mod list for ${SERVER_MODS.length} mods`);
-              } else {
-                // ACK wrapped in loginwrapper
+              } else if (disc === 2) {
+                // S2CModListReply — ACK
                 const channelBuf = writeString('fml:handshake');
-                const ackBuf = Buffer.from([99]);
-                responseData = Buffer.concat([channelBuf, ackBuf]);
+                responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
+              } else if (disc === 3) {
+                // S2CRegistry — ACK
+                const channelBuf = writeString('fml:handshake');
+                responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
+              } else if (disc === 4) {
+                // S2CConfigData — ACK
+                const channelBuf = writeString('fml:handshake');
+                responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
+              } else {
+                // Unknown — try echoing the exact inner data back
+                // This tells the server "I understand and accept this"
+                const channelBuf = writeString('fml:handshake');
+                responseData = Buffer.concat([channelBuf, innerData]);
+                log('FML', `Echoing back inner data for unknown disc ${disc}`);
               }
             } else {
               // Unknown inner channel — send empty ACK wrapper
