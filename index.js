@@ -109,57 +109,164 @@ function createBot() {
       version: '1.20.1',
       hideErrors: false,
       checkTimeoutInterval: 60000,
-      // FML2 handshake — intercept login packets to fake Forge client
-      // This tricks the server into thinking we have all required mods
-      plugins: {},
     });
 
-    // ── FML2 FORGE HANDSHAKE BYPASS ──────────────────────────
-    // When the server sends the mod list during login, we echo it back
-    // so the server thinks we have all required mods installed.
-    // This is the only reliable way to join a Forge server without mods.
-    bot._client.on('custom_payload', (packet) => {
-      try {
-        const channel = packet.channel;
-        if (!channel) return;
+    // ── FML2 FORGE HANDSHAKE WITH FULL MOD LIST ──────────────
+    // The server sends its mod list and expects the client to echo
+    // back the SAME mods. We hardcode all 63 mods from this server.
+    const client = bot._client;
 
-        // FML2 handshake channel
-        if (channel === 'fml:handshake' || channel === 'fml2:handshake') {
-          log('Forge', `FML handshake on channel: ${channel}`);
-          // Send acknowledgement back
-          bot._client.write('custom_payload', {
-            channel: channel,
-            data: packet.data
-          });
-        }
+    // All mods from the server's mods folder
+    const SERVER_MODS = [
+      { modId: 'alexscaves',          version: '2.0.2'   },
+      { modId: 'alexsmobs',           version: '1.22.9'  },
+      { modId: 'another_furniture',   version: '1.20.1-3.0.4' },
+      { modId: 'architectury',        version: '9.2.14'  },
+      { modId: 'athena',              version: '1.20.1-3.1.2' },
+      { modId: 'attributefix',        version: '1.20.1-21.0.5' },
+      { modId: 'balm',                version: '7.3.38'  },
+      { modId: 'betterthirdperson',   version: '1.20.1-9.0' },
+      { modId: 'biomesoplenty',       version: '1.20.1-18.0.0.592' },
+      { modId: 'bookshelf',           version: '1.20.1-20.2.15' },
+      { modId: 'chatanimation',       version: '1.20.1-1.1.3' },
+      { modId: 'chipped',             version: '1.20.1-3.0.7' },
+      { modId: 'citadel',             version: '2.6.3-1.20.1' },
+      { modId: 'cloth_config',        version: '11.1.136' },
+      { modId: 'collective',          version: '1.20.1-8.13' },
+      { modId: 'controlling',         version: '1.20.1-12.0.2' },
+      { modId: 'copycats',            version: '3.0.7+mc1.20.1-4.0.3.4' },
+      { modId: 'corgilib',            version: '1.20.1-4.0.3.4' },
+      { modId: 'coroutil',            version: '1.20.1-1.3.7' },
+      { modId: 'create',              version: '1.20.1-6.0.8' },
+      { modId: 'createaddition',      version: '1.20.1-1.3.3' },
+      { modId: 'createdeco',          version: '2.0.3-1.20.1' },
+      { modId: 'cristellib',          version: '1.1.6'   },
+      { modId: 'dungeonsandtaverns',  version: '3.0.3'   },
+      { modId: 'dungeonsarise',       version: '1.20.x-2.1.58-release' },
+      { modId: 'entity_model_features', version: '1.20.1-3.0.12' },
+      { modId: 'entity_texture_features', version: '1.20.1-7.0.9' },
+      { modId: 'entityculling',       version: '1.9.5-mc1.20.1' },
+      { modId: 'farmersdelight',      version: '1.20.1-2.10' },
+      { modId: 'ferritecore',         version: '6.0.1'   },
+      { modId: 'firstperson',         version: '2.6.3-mc1.20.1' },
+      { modId: 'fullbrightnesstoggle', version: '1.20.1-4.4' },
+      { modId: 'geckolib',            version: '1.20.1-4.8.3' },
+      { modId: 'handcrafted',         version: '1.20.1-3.0.6' },
+      { modId: 'ias',                 version: '1.20.1-9.0.4' },
+      { modId: 'immersive_aircraft',  version: '1.20.1-1.4.0' },
+      { modId: 'incendium',           version: '1.20.x_v5.3.5' },
+      { modId: 'interiors',           version: '1.20.1-0.6.0' },
+      { modId: 'jei',                 version: '1.20.1-forge-15.20.0.129' },
+      { modId: 'modernfix',           version: '5.26.2+mc1.20.1' },
+      { modId: 'oh_the_biomes_weve_gone', version: '1.20.1-2.3.3' },
+      { modId: 'oh_the_trees_youll_grow', version: '1.20.1-1.7.5' },
+      { modId: 'paraglider',          version: '1.20.1-3' },
+      { modId: 'pickupnotifier',      version: '1.20.1-8.0.1' },
+      { modId: 'projectile_damage',   version: '1.20.1-3.2.2' },
+      { modId: 'puzzleslib',          version: '1.20.1-8.1.33' },
+      { modId: 'regionsunexplored',   version: '1.20.1-0.5.6' },
+      { modId: 'resourcefullib',      version: '1.20.1-2.1.29' },
+      { modId: 'resourcepackoverrides', version: '1.20.1-8.0.3' },
+      { modId: 'searchables',         version: '1.20.1-1.0.3' },
+      { modId: 'smoothgui',           version: '1.20.1-1.1.1' },
+      { modId: 'sophisticatedbackpacks', version: '1.20.1-3.24.27.1580' },
+      { modId: 'sophisticatedcore',   version: '1.20.1-1.3.8.1524' },
+      { modId: 'soulslike_weaponry',  version: '1.3.1-1.20.1' },
+      { modId: 'spartanweaponry',     version: '1.20.1-3.2.1' },
+      { modId: 'steam_rails',         version: '1.7.2+forge-mc1.20.1' },
+      { modId: 'terrablender',        version: '1.20.1-3.0.1.10' },
+      { modId: 'towns_and_towers',    version: '1.20.1-1.12-Fabric+Forge' },
+      { modId: 'watut',               version: '1.20.1-1.2.3' },
+      { modId: 'waystones',           version: '1.20.1-14.1.20' },
+      { modId: 'xaerominimap',        version: '1.20.1-25.3.10' },
+      { modId: 'yungsapi',            version: '1.20.1-4.0.6' },
+      { modId: 'yungscavebiomes',     version: '1.20.1-2.0.5' },
+      // Forge itself must be in the list
+      { modId: 'forge',               version: '1.20.1-47.3.0' },
+      { modId: 'minecraft',           version: '1.20.1' },
+    ];
 
-        // ModList channel — server sends its mod list, we echo it back
-        if (channel === 'forge:tier') {
-          bot._client.write('custom_payload', {
-            channel: 'forge:tier',
-            data: packet.data
-          });
-        }
-      } catch (e) {
-        log('Forge', `Handshake error: ${e.message}`);
+    // Encode a VarInt into a Buffer
+    function writeVarInt(value) {
+      const bytes = [];
+      do {
+        let byte = value & 0x7F;
+        value >>>= 7;
+        if (value !== 0) byte |= 0x80;
+        bytes.push(byte);
+      } while (value !== 0);
+      return Buffer.from(bytes);
+    }
+
+    // Encode a UTF-8 string prefixed with VarInt length
+    function writeString(str) {
+      const strBuf = Buffer.from(str, 'utf8');
+      return Buffer.concat([writeVarInt(strBuf.length), strBuf]);
+    }
+
+    // Build the FML2 ModList response packet
+    // Discriminator 2 = C2SModListReply
+    function buildModListResponse() {
+      const parts = [Buffer.from([2])]; // discriminator
+      parts.push(writeVarInt(SERVER_MODS.length));
+      for (const mod of SERVER_MODS) {
+        parts.push(writeString(mod.modId));
+        parts.push(writeString(mod.version));
       }
-    });
+      return Buffer.concat(parts);
+    }
 
-    // Alternative: intercept login_plugin_request (1.20.1 uses this for FML)
-    bot._client.on('login_plugin_request', (packet) => {
+    // Build ACK packet (discriminator 99 = C2SAcknowledge)
+    function buildAck() {
+      return Buffer.from([99]);
+    }
+
+    const onLoginPlugin = (packet) => {
+      log('Forge', `Plugin request: ${packet.channel}`);
       try {
-        log('Forge', `Login plugin request: ${packet.channel || 'unknown'}`);
-        // Respond to ALL plugin requests with empty success response
-        // This makes the server think we accepted all mod negotiation
-        bot._client.write('login_plugin_response', {
+        let responseData = Buffer.alloc(0);
+        let successful = true;
+
+        if (packet.channel === 'fml:handshake') {
+          const discriminator = packet.data?.length > 0 ? packet.data[0] : -1;
+          log('Forge', `FML discriminator: ${discriminator}`);
+
+          if (discriminator === 1) {
+            // S2CModList — server sends mod list, we reply with our matching mod list
+            responseData = buildModListResponse();
+            log('Forge', `Sending mod list with ${SERVER_MODS.length} mods`);
+          } else if (discriminator === 2) {
+            // S2CModListReply or channel registration
+            responseData = buildAck();
+          } else if (discriminator === 3) {
+            // S2CRegistry — server sends registry data, we ACK
+            responseData = buildAck();
+          } else if (discriminator === 4) {
+            // S2CConfigData
+            responseData = buildAck();
+          } else {
+            responseData = buildAck();
+          }
+        }
+
+        client.write('login_plugin_response', {
           messageId: packet.messageId,
-          successful: true,
-          data: packet.data || Buffer.alloc(0)
+          successful,
+          data: responseData,
         });
       } catch (e) {
-        log('Forge', `Plugin request error: ${e.message}`);
+        log('Forge', `Plugin response error: ${e.message}`);
+        try {
+          client.write('login_plugin_response', {
+            messageId: packet.messageId,
+            successful: false,
+            data: Buffer.alloc(0),
+          });
+        } catch (_) {}
       }
-    });
+    };
+
+    client.on('login_plugin_request', onLoginPlugin);
 
     bot.loadPlugin(pathfinder);
 
