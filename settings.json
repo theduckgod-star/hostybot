@@ -1,13 +1,13 @@
 {
-  "name": "AFK Bot",
+  "name": "Vaivashvat",
   "bot-account": {
-    "username": "imgonnacream",
+    "username": "Vaivashvat",
     "password": "",
     "type": "offline"
   },
   "server": {
-    "ip": "7L_SMP_is_real.aternos.me",
-    "port": 62213,
+    "ip": "ind6.softhost.in",
+    "port": 64523,
     "version": "",
     "try-creative": false
   },
@@ -42,9 +42,9 @@
     "max-reconnect-delay": 120000
   },
   "movement": {
-    "enabled": true,
+    "enabled": false,
     "circle-walk": {
-      "enabled": true,
+      "enabled": false,
       "radius": 4,
       "speed": 3000
     },
@@ -53,7 +53,7 @@
       "interval": 5000
     },
     "random-jump": {
-      "enabled": true,
+      "enabled": false,
       "interval": 10000
     }
   },
