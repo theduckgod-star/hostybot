@@ -221,26 +221,67 @@ function createBot() {
       }
     });
 
-    // Handle FML2 login plugin requests
+    // Handle FML3 login plugin requests
     client.on('login_plugin_request', (packet) => {
       log('FML', `Plugin request: ${packet.channel} (id:${packet.messageId})`);
       try {
         let responseData = Buffer.alloc(0);
         let successful = true;
 
-        if (packet.channel === 'fml:handshake') {
+        if (packet.channel === 'fml:loginwrapper') {
+          // FML3 loginwrapper — parse the inner packet
+          // Format: [channel:String][data:ByteArray]
+          // We need to read the inner channel and respond appropriately
+          const data = packet.data;
+          if (data && data.length > 0) {
+            // Read inner channel string (VarInt length + UTF8 bytes)
+            let offset = 0;
+            let strLen = 0;
+            let shift = 0;
+            while (offset < data.length) {
+              const byte = data[offset++];
+              strLen |= (byte & 0x7F) << shift;
+              shift += 7;
+              if (!(byte & 0x80)) break;
+            }
+            const innerChannel = data.slice(offset, offset + strLen).toString('utf8');
+            log('FML', `Inner channel: ${innerChannel}`);
+
+            if (innerChannel === 'fml:handshake') {
+              const innerData = data.slice(offset + strLen);
+              const disc = innerData.length > 0 ? innerData[0] : -1;
+              log('FML', `Handshake discriminator: ${disc}`);
+
+              if (disc === 1) {
+                // S2CModList — wrap our mod list response in loginwrapper format
+                const modListBuf = buildModListResponse();
+                const channelBuf = writeString('fml:handshake');
+                responseData = Buffer.concat([channelBuf, modListBuf]);
+                log('FML', `Sending mod list for ${SERVER_MODS.length} mods`);
+              } else {
+                // ACK wrapped in loginwrapper
+                const channelBuf = writeString('fml:handshake');
+                const ackBuf = Buffer.from([99]);
+                responseData = Buffer.concat([channelBuf, ackBuf]);
+              }
+            } else {
+              // Unknown inner channel — send empty ACK wrapper
+              const channelBuf = writeString(innerChannel);
+              responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
+            }
+          }
+        } else if (packet.channel === 'fml:handshake') {
+          // Direct FML2 handshake (older format)
           const disc = packet.data?.[0] ?? -1;
-          log('FML', `Discriminator: ${disc}`);
+          log('FML', `Direct handshake discriminator: ${disc}`);
           if (disc === 1) {
-            // S2CModList — reply with our mod list
             responseData = buildModListResponse();
             log('FML', `Sending ${SERVER_MODS.length} mods`);
           } else {
-            // All other FML packets — ACK (0x63)
             responseData = Buffer.from([99]);
           }
         } else {
-          // Unknown plugin channel — respond with empty success
+          // Unknown channel — respond with empty success
           successful = true;
           responseData = Buffer.alloc(0);
         }
@@ -250,6 +291,7 @@ function createBot() {
           successful,
           data: responseData,
         });
+        log('FML', `Responded to id:${packet.messageId}`);
       } catch (e) {
         log('FML', `Error: ${e.message}`);
         try {
