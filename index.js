@@ -247,31 +247,13 @@ function createBot() {
 
             log('FML', `Inner: ${innerChannel} disc:${disc} hex:${data.toString('hex').slice(0,60)}`);
 
-            // FML3 loginwrapper response format:
-            // The client must echo back the SAME loginwrapper structure
-            // with a C2S response payload inside
-
-            if (innerChannel === 'fml:handshake') {
-              let innerResponse;
-
-              if (disc === 1) {
-                // S2CModList — respond with C2SModListReply (disc=2) + our mod list
-                innerResponse = buildModListResponse();
-                log('FML', `Replying with mod list (${SERVER_MODS.length} mods)`);
-              } else {
-                // All other packets — C2SAcknowledge (disc=99)
-                innerResponse = Buffer.from([99]);
-                log('FML', `ACK for disc ${disc}`);
-              }
-
-              // Wrap response: [channelStr][innerResponse]
-              const channelBuf = writeString('fml:handshake');
-              responseData = Buffer.concat([channelBuf, innerResponse]);
-            } else {
-              // Unknown inner channel — send minimal ACK
-              const channelBuf = writeString(innerChannel);
-              responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
-            }
+            // FML3 loginwrapper: server sends mod channel registry data
+            // Client must respond with an EMPTY loginwrapper payload
+            // meaning: "I received this, here is my empty response"
+            // The channel string must be present but inner data is empty
+            const channelBuf = writeString(innerChannel);
+            responseData = Buffer.concat([channelBuf, Buffer.alloc(0)]);
+            log('FML', `Empty ACK for ${innerChannel} (id:${packet.messageId})`);
           } else {
             // Empty data — respond with empty success
             responseData = Buffer.alloc(0);
