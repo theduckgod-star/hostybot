@@ -245,36 +245,15 @@ function createBot() {
             const innerData = data.slice(offset + strLen);
             const disc = innerData.length > 0 ? innerData[0] : -1;
 
-            log('FML', `Inner: ${innerChannel} disc:${disc} hex:${data.toString('hex')}`);
+            log('FML', `Inner: ${innerChannel} disc:${disc} hex:${data.toString('hex').slice(0,40)}`);
 
-            // The server sends 4 packets then drops us.
-            // This means after our 4 ACKs, the server expects US to send something.
-            // In real FML3, after receiving S2CChannelMismatchData packets,
-            // the client sends C2SModListReply with its channel list.
-            // Let's send our mod list wrapped in loginwrapper after the last packet.
-
+            // FML3: server sends S2CChannelMismatchData packets (4 of them)
+            // Client must reply with C2SAcknowledge wrapped in loginwrapper
+            // C2SAcknowledge discriminator = 0xFF (255 / -1 signed)
             const channelBuf = writeString(innerChannel);
-            responseData = Buffer.concat([channelBuf, Buffer.alloc(0)]);
-            log('FML', `Empty ACK for ${innerChannel} (id:${packet.messageId})`);
-
-            // After responding to all 4 channel packets, send our mod list
-            // We send it as an extra loginwrapper with fml:handshake + modlist
-            if (packet.messageId === 3) {
-              log('FML', 'Sending C2SModListReply after all channel packets');
-              setTimeout(() => {
-                try {
-                  const modListBuf = buildModListResponse();
-                  const ch = writeString('fml:handshake');
-                  const payload = Buffer.concat([ch, modListBuf]);
-                  // Send as a custom_payload since we're now in play state
-                  client.write('custom_payload', {
-                    channel: 'fml:loginwrapper',
-                    data: payload,
-                  });
-                  log('FML', `Sent mod list (${SERVER_MODS.length} mods)`);
-                } catch (e) { log('FML', `ModList send error: ${e.message}`); }
-              }, 100);
-            }
+            const ackBuf = Buffer.from([0xFF]);
+            responseData = Buffer.concat([channelBuf, ackBuf]);
+            log('FML', `ACK 0xFF for packet id:${packet.messageId}`);
           } else {
             // Empty data — respond with empty success
             responseData = Buffer.alloc(0);
