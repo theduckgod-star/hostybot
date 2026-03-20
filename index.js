@@ -229,12 +229,9 @@ function createBot() {
         let successful = true;
 
         if (packet.channel === 'fml:loginwrapper') {
-          // FML3 loginwrapper — parse the inner packet
-          // Format: [channel:String][data:ByteArray]
-          // We need to read the inner channel and respond appropriately
           const data = packet.data;
           if (data && data.length > 0) {
-            // Read inner channel string (VarInt length + UTF8 bytes)
+            // Read inner channel string
             let offset = 0;
             let strLen = 0;
             let shift = 0;
@@ -245,45 +242,39 @@ function createBot() {
               if (!(byte & 0x80)) break;
             }
             const innerChannel = data.slice(offset, offset + strLen).toString('utf8');
-            log('FML', `Inner channel: ${innerChannel}`);
-            log('FML', `Raw data hex: ${data.toString('hex').slice(0, 80)}`);
-            log('FML', `Inner data hex: ${data.slice(offset + strLen).toString('hex').slice(0, 40)}`);
+            const innerData = data.slice(offset + strLen);
+            const disc = innerData.length > 0 ? innerData[0] : -1;
+
+            log('FML', `Inner: ${innerChannel} disc:${disc} hex:${data.toString('hex').slice(0,60)}`);
+
+            // FML3 loginwrapper response format:
+            // The client must echo back the SAME loginwrapper structure
+            // with a C2S response payload inside
 
             if (innerChannel === 'fml:handshake') {
-              const innerData = data.slice(offset + strLen);
-              const disc = innerData.length > 0 ? innerData[0] : -1;
-              log('FML', `Handshake discriminator: ${disc} (0x${disc.toString(16)})`);
+              let innerResponse;
 
               if (disc === 1) {
-                // S2CModList
-                const modListBuf = buildModListResponse();
-                const channelBuf = writeString('fml:handshake');
-                responseData = Buffer.concat([channelBuf, modListBuf]);
-                log('FML', `Sending mod list for ${SERVER_MODS.length} mods`);
-              } else if (disc === 2) {
-                // S2CModListReply — ACK
-                const channelBuf = writeString('fml:handshake');
-                responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
-              } else if (disc === 3) {
-                // S2CRegistry — ACK
-                const channelBuf = writeString('fml:handshake');
-                responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
-              } else if (disc === 4) {
-                // S2CConfigData — ACK
-                const channelBuf = writeString('fml:handshake');
-                responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
+                // S2CModList — respond with C2SModListReply (disc=2) + our mod list
+                innerResponse = buildModListResponse();
+                log('FML', `Replying with mod list (${SERVER_MODS.length} mods)`);
               } else {
-                // Unknown — try echoing the exact inner data back
-                // This tells the server "I understand and accept this"
-                const channelBuf = writeString('fml:handshake');
-                responseData = Buffer.concat([channelBuf, innerData]);
-                log('FML', `Echoing back inner data for unknown disc ${disc}`);
+                // All other packets — C2SAcknowledge (disc=99)
+                innerResponse = Buffer.from([99]);
+                log('FML', `ACK for disc ${disc}`);
               }
+
+              // Wrap response: [channelStr][innerResponse]
+              const channelBuf = writeString('fml:handshake');
+              responseData = Buffer.concat([channelBuf, innerResponse]);
             } else {
-              // Unknown inner channel — send empty ACK wrapper
+              // Unknown inner channel — send minimal ACK
               const channelBuf = writeString(innerChannel);
               responseData = Buffer.concat([channelBuf, Buffer.from([99])]);
             }
+          } else {
+            // Empty data — respond with empty success
+            responseData = Buffer.alloc(0);
           }
         } else if (packet.channel === 'fml:handshake') {
           // Direct FML2 handshake (older format)
